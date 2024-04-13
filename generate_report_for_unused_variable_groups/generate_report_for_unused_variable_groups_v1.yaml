@@ -1,13 +1,19 @@
+# !!!NOTE!!!
+# Pipeline is prepare for Azure DevOps Server (On-Premise)
 pool:
   name: pool
 
 workspace:
   clean: all
 
+# We need to create a PAT token to authenticate in api-version
+# https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops&tabs=Windows
+# and then add it to pipeline Variables as secret value
 variables:
   pat: '$(patToken)'
 
 steps:
+# You need to set serverName, collectionName and Project in Uris before run it
 - task: Powershell@2
   displayName: 'Get all VariableGroups'
   targetType: 'inline'
@@ -21,6 +27,7 @@ steps:
 	  }
 	  Write-Host "##vso[task.setvariable variable=allVariableGroups]$allVariableGroups"
 
+# You need to set serverName, collectionName and Project in Uris before run it
 - task: Powershell@2
   displayName: 'Get variableGroupsIds from relases definitions'
   targetType: 'inline'
@@ -55,7 +62,10 @@ steps:
 	  $allVariableGroups.GetEnumerator() | Select-Object -Property Name,Value |
         Export-Csv -NoTypeInformation -Path $(Build.ArtifactStagingDirectory)\UnusedVariableGroups.csv	
 
-- task: AzureFileCopy@4
+# We need to create a Service connection and Azure Storage account before run it following
+# https://learn.microsoft.com/en-us/azure/storage/common/storage-account-create?tabs=azure-portal
+# and https://learn.microsoft.com/en-us/azure/devops/pipelines/library/service-endpoints?view=azure-devops&tabs=yaml
+- task: AzureFileCopy@6
   displayName: Copy files to storage account
   inputs:
     SourcePath: $(Build.ArtifactStagingDirectory)\UnusedVariableGroups.csv
