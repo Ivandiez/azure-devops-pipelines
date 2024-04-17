@@ -67,15 +67,18 @@ steps:
           }
         }
         if ($variableGroupsInReleases.length -gt 0) {
+          $variableGroup."UsedInReleases" = $true
           $variableGroup."Releases" = $variableGroupsInReleases
         }
         else {
-          $variableGroup."Releases" = "-"
+          $variableGroup."UsedInReleases" = $false
+          $variableGroup."Releases" = ""
         }
       }
       $allVariableGroups | ForEach-Object { 
         New-Object PSObject -Property $_ 
-      } | Export-Csv -NoTypeInformation -Path $(Build.ArtifactStagingDirectory)\VariableGroupsUsageInformation.csv	
+      } | Select-Object "VariableGroupName", "UsedInReleases", "Releases" | 
+        Export-Csv -NoTypeInformation -Path $(Build.ArtifactStagingDirectory)\VariableGroupsUsageInformation.csv	
 
 # We need to create a Service connection and Azure Storage account before run it following
 # https://learn.microsoft.com/en-us/azure/storage/common/storage-account-create?tabs=azure-portal
