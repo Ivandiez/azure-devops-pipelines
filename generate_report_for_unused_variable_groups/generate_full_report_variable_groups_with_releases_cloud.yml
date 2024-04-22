@@ -19,7 +19,7 @@ steps:
       [System.Collections.ArrayList]$allVariableGroups = @()
       $patAuth = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes(":" + $pat))
       $header = @{"Authorization" = "Basic $patAuth"}
-      $variableGroups = (iwr -Uri https://vsrm.dev.azure.com/{organization}/{project}/_apis/distributedtask/variablegroups?api-version=7.0 -Header $header).Content | ConvertFrom-Json
+      $variableGroups = (iwr -Uri https://dev.azure.com/{organization}/{project}/_apis/distributedtask/variablegroups?api-version=7.0 -Header $header).Content | ConvertFrom-Json
       foreach ($variableGroup in $variableGroups.value) { 
         $variableGroupData = @{
           'VariableGroupId' = $variableGroup.id
