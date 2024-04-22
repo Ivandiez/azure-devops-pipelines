@@ -1,7 +1,5 @@
-# !!!NOTE!!!
-# Pipeline is prepare for Azure DevOps Server (On-Premise)
 pool:
-  name: pool
+  vmImage: 'windows-latest'
 
 workspace:
   clean: all
@@ -13,7 +11,7 @@ variables:
   pat: '$(patToken)'
 
 steps:
-# You need to set serverName, collectionName and Project in Uris before run it
+# You need to set organization and project in Uris before run it
 - task: Powershell@2
   displayName: 'Get all VariableGroups'
   targetType: 'inline'
@@ -21,7 +19,7 @@ steps:
       [System.Collections.ArrayList]$allVariableGroups = @()
       $patAuth = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes(":" + $pat))
       $header = @{"Authorization" = "Basic $patAuth"}
-      $variableGroups = (iwr -Uri https://{serverName}/{collectionName}/{Project}/_apis/distributedtask/variablegroups?api-version=7.0 -Header $header).Content | ConvertFrom-Json
+      $variableGroups = (iwr -Uri https://dev.azure.com/{organization}/{project}/_apis/distributedtask/variablegroups?api-version=7.0 -Header $header).Content | ConvertFrom-Json
       foreach ($variableGroup in $variableGroups.value) { 
         $variableGroupData = @{
           'VariableGroupId' = $variableGroup.id
@@ -31,7 +29,7 @@ steps:
       }
       Write-Host "##vso[task.setvariable variable=allVariableGroups]$allVariableGroups"
 
-# You need to set serverName, collectionName and Project in Uris before run it
+# You need to set organization and project in Uris before run it
 - task: Powershell@2
   displayName: 'Get variableGroups and releases from relases definitions'
   targetType: 'inline'
@@ -39,9 +37,9 @@ steps:
       $usedVariableGroupsAndReleases = @{}
       $patAuth = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes(":" + $pat))
       $header = @{"Authorization" = "Basic $patAuth"}
-      $defenitions = (iwr -Uri https://{serverName}/{collectionName}/{Project}/_apis/release/definitions?api-version=7.0 -Header $header).Content | ConvertFrom-Json
+      $defenitions = (iwr -Uri https://vsrm.dev.azure.com/{organization}/{project}/_apis/release/definitions?api-version=7.0 -Header $header).Content | ConvertFrom-Json
       foreach ($defenitionId in $defenitions.value.id) { 
-        $defenitionDescription = (iwr -Uri "https://{serverName}/{collectionName}/{Project}/_apis/release/definitions/$($defenitionId)?api-version=7.0" -Header $header).Content | ConvertFrom-Json
+        $defenitionDescription = (iwr -Uri "https://vsrm.dev.azure.com/{organization}/{project}/_apis/release/definitions/$($defenitionId)?api-version=7.0" -Header $header).Content | ConvertFrom-Json
         if ($defenitionDescription.variableGroups.count -gt 0) { 
           [System.Collections.ArrayList]$variableGroupsIds = @()
           foreach ($variableGroup in $defenitionDescription.variableGroups) {
