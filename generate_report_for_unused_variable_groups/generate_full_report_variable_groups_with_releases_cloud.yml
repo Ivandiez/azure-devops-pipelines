@@ -13,7 +13,6 @@ steps:
     script: |
       [System.Collections.ArrayList]$allVariableGroups = @()
       $header =  @{"Authorization" ="Bearer $env:SYSTEM_ACCESSTOKEN"}
-      Write-Host $(iwr -Uri https://dev.azure.com/{organization}/{project}/_apis/distributedtask/variablegroups?api-version=7.0 -Header $header)
       $variableGroups = (iwr -Uri https://dev.azure.com/{organization}/{project}/_apis/distributedtask/variablegroups?api-version=7.0 -Header $header).Content | ConvertFrom-Json
       foreach ($variableGroup in $variableGroups.value) { 
         $variableGroupData = @{
