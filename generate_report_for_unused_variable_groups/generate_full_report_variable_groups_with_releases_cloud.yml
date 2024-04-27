@@ -4,39 +4,38 @@ pool:
 workspace:
   clean: all
 
-# We need to create a PAT token to authenticate in api-version
-# https://learn.microsoft.com/en-us/azure/devops/organizations/accounts/use-personal-access-tokens-to-authenticate?view=azure-devops&tabs=Windows
-# and then add it to pipeline Variables as secret value
-variables:
-  pat: '$(patToken)'
-
 steps:
 # You need to set organization and project in Uris before run it
 - task: Powershell@2
   displayName: 'Get all VariableGroups'
-  targetType: 'inline'
+  inputs:
+    targetType: 'inline'
     script: |
       [System.Collections.ArrayList]$allVariableGroups = @()
-      $patAuth = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes(":" + $pat))
-      $header = @{"Authorization" = "Basic $patAuth"}
+      $header =  @{"Authorization" ="Bearer $env:SYSTEM_ACCESSTOKEN"}
+      Write-Host $(iwr -Uri https://dev.azure.com/{organization}/{project}/_apis/distributedtask/variablegroups?api-version=7.0 -Header $header)
       $variableGroups = (iwr -Uri https://dev.azure.com/{organization}/{project}/_apis/distributedtask/variablegroups?api-version=7.0 -Header $header).Content | ConvertFrom-Json
       foreach ($variableGroup in $variableGroups.value) { 
         $variableGroupData = @{
           'VariableGroupId' = $variableGroup.id
           'VariableGroupName' = $variableGroup.name
+          "UsedInReleases" = $false
+          "Releases" = ""
         }
         $allVariableGroups.Add($variableGroupData) | Out-Null
       }
-      Write-Host "##vso[task.setvariable variable=allVariableGroups]$allVariableGroups"
+      Write-Host "##vso[task.setvariable variable=allProjectVariableGroups;]$($allVariableGroups  | ConvertTo-Json -Compress)"
+  env:
+    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
 # You need to set organization and project in Uris before run it
 - task: Powershell@2
   displayName: 'Get variableGroups and releases from relases definitions'
-  targetType: 'inline'
+  inputs:
+    targetType: 'inline'
     script: |
       $usedVariableGroupsAndReleases = @{}
-      $patAuth = [Convert]::ToBase64String([System.Text.Encoding]::UTF8.GetBytes(":" + $pat))
-      $header = @{"Authorization" = "Basic $patAuth"}
+      $header =  @{"Authorization" ="Bearer $env:SYSTEM_ACCESSTOKEN"}
       $defenitions = (iwr -Uri https://vsrm.dev.azure.com/{organization}/{project}/_apis/release/definitions?api-version=7.0 -Header $header).Content | ConvertFrom-Json
       foreach ($defenitionId in $defenitions.value.id) { 
         $defenitionDescription = (iwr -Uri "https://vsrm.dev.azure.com/{organization}/{project}/_apis/release/definitions/$($defenitionId)?api-version=7.0" -Header $header).Content | ConvertFrom-Json
@@ -51,32 +50,31 @@ steps:
           Write-Host There are no variableGroups in $defenitionDescription.name 
         } 
       }
-      Write-Host "##vso[task.setvariable variable=usedVariableGroupsAndReleases]$usedVariableGroupsAndReleases"
+      Write-Host "##vso[task.setvariable variable=usedProjectVariableGroupsAndReleases;]$($usedVariableGroupsAndReleases | ConvertTo-Json -Compress)"
+  env:
+    SYSTEM_ACCESSTOKEN: $(System.AccessToken)
 
 - task: Powershell@2
   displayName: 'create CSV with VariableGroups usage information'
-  targetType: 'inline'
+  inputs:
+    targetType: 'inline'
     script: |
+      $usedVariableGroupsAndReleases = $('$(usedProjectVariableGroupsAndReleases)' | ConvertFrom-Json)
+      $allVariableGroups = $('$(allProjectVariableGroups)' | ConvertFrom-Json)
       foreach ($variableGroup in $allVariableGroups) {
         $variableGroupsInReleases = ""
-        foreach ($release in $usedVariableGroupsAndReleases.Keys) {
-          if ($usedVariableGroupsAndReleases[$release].Contains($variableGroup.VariableGroupId)) {
-            $variableGroupsInReleases += $release + ", "
+        foreach ($release in $usedVariableGroupsAndReleases.PSObject.Properties) {
+          if ($release.Value.Contains($variableGroup.VariableGroupId)) {
+            $variableGroupsInReleases += $release.Name + ", "
           }
         }
         if ($variableGroupsInReleases.length -gt 0) {
           $variableGroup."UsedInReleases" = $true
           $variableGroup."Releases" = $variableGroupsInReleases
         }
-        else {
-          $variableGroup."UsedInReleases" = $false
-          $variableGroup."Releases" = ""
-        }
       }
-      $allVariableGroups | ForEach-Object { 
-        New-Object PSObject -Property $_ 
-      } | Select-Object "VariableGroupName", "UsedInReleases", "Releases" | 
-        Export-Csv -NoTypeInformation -Path $(Build.ArtifactStagingDirectory)\VariableGroupsUsageInformation.csv	
+      $allVariableGroups | Select-Object "VariableGroupName", "UsedInReleases", "Releases" | 
+        Export-Csv -NoTypeInformation -Path $(Build.ArtifactStagingDirectory)\VariableGroupsUsageInformation.csv
 
 # We need to create a Service connection and Azure Storage account before run it following
 # https://learn.microsoft.com/en-us/azure/storage/common/storage-account-create?tabs=azure-portal
